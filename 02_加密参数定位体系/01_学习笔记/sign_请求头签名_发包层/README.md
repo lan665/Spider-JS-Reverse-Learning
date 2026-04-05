@@ -1,5 +1,7 @@
 # 某高校数据查询平台 U-Sign 参数逆向分析
 
+> **⚠️ 合规声明：** 本文档与代码仅供网络安全与逆向工程技术交流、学习使用。为严格遵守相关法律法规，本文档中涉及的目标网站真实域名、URL、核心密钥（Key/IV）及特征明文均已进行**脱敏处理**。严禁将本笔记相关技术用于任何非法或破坏性目的。
+
 ## 1. 目标接口与抓包分析
 * **目标接口:** `/search/colleges/collegeList`
 * **请求方式:** `POST`
@@ -30,27 +32,28 @@
 **1. 编写与注入 Hook 脚本：**
 使用 Tampermonkey（油猴插件）在网页生命周期极早期 (`document-start`) 注入以下代码，强行劫持浏览器的原生 `XMLHttpRequest`。
 
-javascript
-// ==UserScript==
-// @name         XHR U-Sign 万能拦截器
-// @match        *://*.youzy.cn/*
-// @run-at       document-start
-// ==/UserScript==
-
-(function() {
-    var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
-    XMLHttpRequest.prototype.setRequestHeader = function(key, value) {
-        if (key.toLowerCase() === 'u-sign') {
-            console.log("🔥 拦截到关键请求头赋值: ", key, "=", value);
-            debugger; // 强行冻结执行流
-        }
-        return originalSetRequestHeader.apply(this, arguments);
-    };
-})();
+    javascript
+    // ==UserScript==
+    // @name         XHR U-Sign 万能拦截器
+    // @match        *://*[.example-target.com/](https://.example-target.com/)* // [!脱敏] 替换为目标网站的泛域名
+    // @run-at       document-start
+    // ==/UserScript==
+    
+    (function() {
+        var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+        XMLHttpRequest.prototype.setRequestHeader = function(key, value) {
+            if (key.toLowerCase() === 'u-sign') {
+                console.log("🔥 拦截到关键请求头赋值: ", key, "=", value);
+                debugger; // 强行冻结执行流
+            }
+            return originalSetRequestHeader.apply(this, arguments);
+        };
+    })();
 
 ## 3. 加密算法破解
 
 单步进入 `i` 函数，提取出底层的拼接逻辑和加密算法：
+
         e.exports = function(e, t) {
             var r, o = "YOUR_SALT_HERE_***", i = "", a = t || {}, s = (e = e || "").split("?");//# 声明：盐值出于安全合规考虑已脱敏，请通过学习 README 中的逆向思路自行获取
             if (s.length > 0 && (r = s[1]),
@@ -73,4 +76,4 @@ javascript
 ![算法底层特征](./img/04_algorithm_md5.png)
 
 ## 4. Python 还原代码
-    sign.py
+    请参考 ../../02_实战代码/sign.py
