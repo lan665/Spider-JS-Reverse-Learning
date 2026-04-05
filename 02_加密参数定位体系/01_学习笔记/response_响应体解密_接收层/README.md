@@ -11,7 +11,6 @@
 ## 2. 逆向定位过程
 
 ### 2.1使用油猴 Hook `JSON.parse`
-![响应体密文抓包分析](img/02_hook_json_parse.png)
 
 使用 Tampermonkey 在网页生命周期的极早期 (`document-start`) 注入以下代码，强行劫持并重写全局的 `JSON.parse` 方法。利用页面上可见的明文（如“公共资源交易中心”）作为诱饵进行拦截。
 
@@ -33,7 +32,7 @@
         };
     })();
 ### 2.3 追溯调用堆栈 (Call Stack)
-![响应体密文抓包分析](img/03_to_decrypt.png)
+![响应体密文抓包分析](img/02_hook_json_parse.png)
 
 刷新页面重新触发网络请求，代码成功在 Hook 函数内断住。
 展开右侧的 Call Stack (调用堆栈)，向下回溯一层（跳出我们的油猴脚本），瞬间穿透底层框架，精准降落到真实的业务解密现场——Axios 响应拦截器：
@@ -46,7 +45,9 @@
             ? JSON.parse(b(e.Data)) // ⬅️ 目标密文 e.Data 被传入 b()，解密后喂给 JSON.parse
             : (Object(o["Message"])...)
 ### 3. 加密算法破解
-单步进入上文发现的核心解密函数 b(t)，进行代码格式化后，提取出底层解密逻辑：
+![响应体密文抓包分析](img/03_to_decrypt.png)
+
+单步进入发现的核心解密函数 b(t)，进行代码格式化后，提取出底层解密逻辑：
 
     JavaScript
     function b(t) {
