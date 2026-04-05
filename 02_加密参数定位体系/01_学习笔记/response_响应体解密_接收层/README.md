@@ -13,7 +13,6 @@
 ### 2.1使用油猴 Hook `JSON.parse`
 ![响应体密文抓包分析](img/02_hook_json_parse.png)
 
-**2.2. 编写与注入 Hook 脚本：**
 使用 Tampermonkey 在网页生命周期的极早期 (`document-start`) 注入以下代码，强行劫持并重写全局的 `JSON.parse` 方法。利用页面上可见的明文（如“公共资源交易中心”）作为诱饵进行拦截。
 
     javascript
@@ -33,7 +32,7 @@
             return originalParse(text, reviver);
         };
     })();
-**2.3 追溯调用堆栈 (Call Stack)**
+### 2.3 追溯调用堆栈 (Call Stack)
 ![响应体密文抓包分析](img/03_to_decrypt.png)
 
 刷新页面重新触发网络请求，代码成功在 Hook 函数内断住。
@@ -46,7 +45,7 @@
         : "200" === e.State 
             ? JSON.parse(b(e.Data)) // ⬅️ 目标密文 e.Data 被传入 b()，解密后喂给 JSON.parse
             : (Object(o["Message"])...)
-**3. 加密算法破解**
+### 3. 加密算法破解
 单步进入上文发现的核心解密函数 b(t)，进行代码格式化后，提取出底层解密逻辑：
 
     JavaScript
@@ -70,7 +69,9 @@
     踩坑记录： 在 Hook 触发的 debugger 状态下，若直接在控制台执行 r["e"] 获取密钥，系统会抛出 ReferenceError: r is not defined。这是因为当前控制台的作用域停留在了全局 Hook 函数中，无法穿透 Webpack 的局部闭包。
     
     破局方法： 在右侧 Call Stack 面板，鼠标单击属于 b 函数的那一层栈帧，强制切换执行上下文。
-    此时重新在控制台输入 r["e"] 和 r["i"]，成功缴获硬编码的明文密钥对： Key: ****** (出于安全合规要求，已遮挡字符) IV: ****** (出于安全合规要求，已遮挡字符)
+    此时重新在控制台输入 r["e"] 和 r["i"]，成功缴获硬编码的明文密钥对：
+    Key: ****** (出于安全合规要求，已遮挡字符) 
+    IV: ****** (出于安全合规要求，已遮挡字符)
 
 ## 4. Python 还原代码
     请参考 ../../02_实战代码/response.py
