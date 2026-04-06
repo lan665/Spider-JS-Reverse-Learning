@@ -27,9 +27,9 @@
 
 ## 内部笔记导读
 
-* 📝 `sign_请求头签名_发包层`：通过 Axios 拦截器与 Initiator 跨越异步断层，定位 MD5 签名。
-* 📝 `response_响应体解密_接收层`：利用油猴 Hook `JSON.parse` 穿透 Webpack 闭包，缴获 AES 密钥。
-* 📝 `qcc_请求头签名_发包层`：突破 Webpack 混淆与作用域陷阱，通过 Axios 拦截器还原某查查（某找找）动态时间戳与 MD5 签名算法。
+* 📝 `case1_sign`：通过 Axios 拦截器与 Initiator 跨越异步断层，定位 MD5 签名。（发包层）
+* 📝 `case2_response`：利用油猴 Hook `JSON.parse` 穿透 Webpack 闭包，缴获 AES 密钥。（接受层）
+* 📝 `case2_sign`：突破 Webpack 混淆与作用域陷阱，通过 Axios 拦截器还原某查查（某找找）动态时间戳与 MD5 签名算法。（发包层）
 
 > 💡 **避坑指南：** 本阶段所有的密码学还原，均建立在“算法未被面条代码重度混淆/魔改”的前提下。如果遇到完全看不懂的算法调用，请移步至【阶段二：04_魔改算法与黑盒调用对抗】。
 
