@@ -18,6 +18,3 @@ Babel 的流水线作业分为三大核心 API 步骤：
 - ❌ **错误尝试**：试图用正则表达式（Regex）去全局替换混淆代码。由于正则无法理解 JS 的作用域和嵌套结构，极易误伤正常代码导致运行崩溃。
 - ✅ **正确思路**：严格遵守 AST 的节点规范，使用 `t.identifier()` 或 `t.stringLiteral()` 等 Babel Types 构造器来生成新节点，确保语法树的绝对合法性。
 
-## 5. 参考资源
-- [Babel Plugin Handbook (Babel 插件开发手册)]
-- [AST Explorer 在线分析工具]
