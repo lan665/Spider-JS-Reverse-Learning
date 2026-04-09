@@ -18,7 +18,7 @@ class LagouAuthDownloaderMiddleware:
             "************"
         )
         # 2. 你的 AES 偏移量和动态生成的 Key
-        self.aes_iv = b'c558Gq0YQK2QUlMc'
+        self.aes_iv = b'********'
         self.aes_key = self._generate_aes_key(32)
 
         # 3. 你抓取到的真实有效的风控 Cookie
@@ -76,7 +76,7 @@ class LagouAuthDownloaderMiddleware:
             request.headers['Origin'] = 'https://www.lagou.com'
             request.headers['Referer'] = 'https://www.lagou.com/gongsi/'
 
-            # 注入你的巨型 Cookie
+            # 注入你的Cookie
             request.headers['Cookie'] = self.cookies
 
             # 注入基础反爬 User-Agent 和 Content-Type
