@@ -12,7 +12,8 @@ from Crypto.Cipher import PKCS1_v1_5
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from DrissionPage import ChromiumPage, ChromiumOptions
-
+from twisted.internet import threads
+import asyncio
 # ==========================================
 # 全局常量：真实野生轨迹数据
 # ==========================================
@@ -49,16 +50,7 @@ class LagouAuthDownloaderMiddleware:
         self.dynamic_waf_cookies = {}
         # 填入抓到的业务长效 Cookie (不需要包含 acw_tc 等 WAF 参数)
         self.base_cookies = {
-            'user_trace_token': '',
-            'LGUID': '',
-            'JSESSIONID': '',
-            'WEBTJ-ID': '',
-            'X_HTTP_TOKEN': '',
-            'LGSID': '',
-            'tfstk': '',
-            'LGRID': '',
-            # 'ssxmod_itna': '1-eqGxgDuDyCK7qD5i7qqiQ50QpTOG3DzxC5iOFDuxiK08D6DYqGdYRq3fhy3Dc7lcuxN5q4=W5D/K0deDZDGIdDqx0EiUDiqe4SSiGyRx3hgE7P7eWb7dbYiek7GBnENHs11qAawDKRS3YHY0e4DHxi8DBFs1P4DxrPD5xDTDWeDGDD3WxGaDmeDegEwD0Rp1KSAHKOoD7eDXxGCDQFoH4GWDiPD71oFeBDxHtEeDD5DnZ82L4DWDWpIeDDzeW=x0DrpeDi3H4Sh2FRj5wDAR1oD9h4Ds2uS4HQMUTGEGFUCkwWmX/3DvxDk9RTo8FRiTAbWt8khANYhrCxkKroY7Di0DV4xtDdqRxtDK7LDYGd3G_i7YlD=SYeCEYChOhiNh7wCxdq0xh7s/dGH8GPQeiGhiDor7tYxKYBNQWx0Y7qxeKGhSixZB5GAqyGo/Bx7OEACpq4f4D',
-            # 'ssxmod_itna2': '1-eqGxgDuDyCK7qD5i7qqiQ50QpTOG3DzxC5iOFDuxiK08D6DYqGdYRq3fhy3Dc7lcuxN5q4=QeDAn6i5QDnAD0307e104Dlxo3xLYQGp5yAYKGZKOR00FtfTc8reccGAe2SjLd5mreUt1chi5BoP40DTWiDq7SpAT=tvCYB51u6P4thaQkg4NoRwOnhiAup5s0CqxkFr85UEWozpsXavT/h3Ot097X3LkLI7Hphp0r=W2FgIIccPNlmCHPD1u92l70G0f3nIxbVWpcOL4j3pG_4uFvXET_25pkRTjmoSi3LZIQtH_eNfmm6f7jNyDhumYH7Aa=AgQGyGNPlI7BiVDxDp3D_5g7DyQG4U52QGy6KHDxEOYrEDcg0rSe/WDQKqkrXB1XcW5qlKYD=gGAoxKOgG=_N2=GegG1xYxx=/E24/K7iGyDPzxch6K/BGoOI6QQuQD27osov0UfF6te=poEi=Ii9j2vQjp3v3A9mxoyitVcaFZIhP0K9L0xRObvyr7H4T/rILxbY1I23YPUrV_pYBKQzyD62iI6=abL0XSaLSS4bOP35w=_ED4q/BiFVW4wF/ZyybBLCXV3U/jEg_2UmYP7KErK07EuP4YQAiA=LBmP=PsAAx2K2ZlexqEHFvpaLD427DKiUxWvhQyX5Ph5_iiD9MzeAqPnwsD_tCqzB/9qwldD',
+            ""
         }
 
     @classmethod
@@ -74,7 +66,7 @@ class LagouAuthDownloaderMiddleware:
         headers = {
             'Accept': 'application/json, text/plain, */*',
             'User-Agent': '',
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Content-Type': 'application/json; charset=UTF-8',
         }
         json_data = {'secretKeyDecode': secret_key_decode}
 
@@ -91,38 +83,48 @@ class LagouAuthDownloaderMiddleware:
 
     # ================= 核心：请求与风控响应拦截 =================
 
-    def process_request(self, request, spider):
-        if "0-0-0-0.json" in request.url:
-            # 1. 确保有 WAF Cookie
-            if not self.dynamic_waf_cookies:
-                self._refresh_waf_cookies(spider, request.url)
+    async def process_request(self, request, spider):
+        # 1. 解耦：从 Spider 传递的 meta 中动态提取原料
+        payload_dict = request.meta.get('payload_dict')
+        form_str_for_hash = request.meta.get('form_str_for_hash')
 
-            # 2. 提取翻页参数 (由 Spider 传入)
-            page_num = request.meta.get('page', 1)
+        # 如果没有携带加密原料，说明是普通请求，直接放行
+        if not payload_dict or not form_str_for_hash:
+            return None
 
-            # 3. 构建“双标”加密原料
-            form_str_for_hash = f"first=false&pn={page_num}&sortField=0&havemark=0"
-            payload_dict = {"first": "false", "pn": str(page_num), "sortField": "0", "havemark": "0"}
+        # 2. 异步改造：如果没有 WAF Cookie，挂起引擎，丢给后台线程去跑浏览器
+        if not self.dynamic_waf_cookies:
+            spider.logger.info(f"⏳ 引擎挂起，等待获取 WAF Cookie...")
+            # 2. 改用 await asyncio.to_thread 将耗时任务放入原生线程池，彻底消除 Deferred 警告
+            await asyncio.to_thread(self._refresh_waf_cookies, spider, request.url)
 
-            # 4. 兵分两路生成签名与载荷
-            x_s_header = self._generate_xs_header(request.url, params_str=form_str_for_hash)
-            encrypted_data = self._encrypt_payload(payload_dict)
-
-            # 5. 注入发包核心参数
-            request.headers['X-K-HEADER'] = self.secret_key_value
-            request.headers['X-S-HEADER'] = x_s_header
-            request.headers['X-SS-REQ-HEADER'] = json.dumps({"secret": self.secret_key_value}, separators=(',', ':'))
-            request.headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
-            request.headers['Origin'] = 'https://www.lagou.com'
-            request.headers['Referer'] = 'https://www.lagou.com/gongsi/'
-
-            # 使用表单格式发送密文
-            request.body = f"data={encrypted_data}".encode('utf-8')
-
-            # 组装长效业务 Cookie 与 动态 WAF Cookie
-            request.cookies = {**self.base_cookies, **self.dynamic_waf_cookies}
-
+        # 3. 如果已经有了 Cookie，直接进行内存组装
+        self._assemble_request(request, payload_dict, form_str_for_hash)
         return None
+
+    def _async_prepare_request(self, request, spider, payload_dict, form_str_for_hash):
+        """后台线程专用的执行流"""
+        self._refresh_waf_cookies(spider, request.url)  # 这步会耗时几秒，但因为在线程池里，不影响 Scrapy 主引擎并发
+        self._assemble_request(request, payload_dict, form_str_for_hash)
+        return None  # 返回 None 表示放行请求
+
+    def _assemble_request(self, request, payload_dict, form_str_for_hash):
+        """统一的加密参数组装工厂"""
+        # 兵分两路生成签名与载荷
+        x_s_header = self._generate_xs_header(request.url, params_str=form_str_for_hash)
+        encrypted_data = self._encrypt_payload(payload_dict)
+
+        # 注入发包核心参数
+        request.headers['User-Agent'] = ''
+        request.headers['X-K-HEADER'] = self.secret_key_value
+        request.headers['X-S-HEADER'] = x_s_header
+        request.headers['X-SS-REQ-HEADER'] = json.dumps({"secret": self.secret_key_value}, separators=(',', ':'))
+        request.headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
+        request.headers['Origin'] = 'https://www.lagou.com'
+        request.headers['Referer'] = 'https://www.lagou.com/gongsi/'
+
+        request._set_body(f"data={encrypted_data}".encode('utf-8'))
+        request.cookies = {**self.base_cookies, **self.dynamic_waf_cookies}
 
     def process_response(self, request, response, spider):
         """检测阿里 WAF 拦截并触发自动重试"""
@@ -132,21 +134,27 @@ class LagouAuthDownloaderMiddleware:
                 spider.logger.error(f"☠️ 请求重试 2 次依然失败，丢弃: {request.url}")
                 return response
 
-            spider.logger.warning(f"🚨 遭遇 WAF 拦截！准备唤醒 DrissionPage 突破...")
-            self._refresh_waf_cookies(spider, request.url)
+            spider.logger.warning(f"🚨 遭遇 WAF 拦截！准备重置通行证...")
 
-            # 复制原请求，打上新的标记和 Cookie 重新投递
+            # 💡 核心修复：清空失效的 Cookie，促使下次重试时去触发后台获取
+            with self.cookie_lock:
+                self.dynamic_waf_cookies = {}
+
+            # 复制原请求，打上新的标记重投队列
             new_request = request.copy()
             new_request.meta['waf_retries'] = retries + 1
             new_request.dont_filter = True
-            new_request.cookies = {**self.base_cookies, **self.dynamic_waf_cookies}
-            return new_request
+
+            return new_request  # 将请求打回重新调度
 
         return response
 
     def _refresh_waf_cookies(self, spider, url):
-        """线程安全的 WAF Cookie 刷新动作"""
         with self.cookie_lock:
+            if self.dynamic_waf_cookies:
+                spider.logger.info("✅ 检测到已有新鲜通行证，直接借用，取消唤醒浏览器...")
+                return
+
             spider.logger.info("🔧 [泵机] 正在隐蔽启动浏览器提取通行证...")
             new_cookies = self._get_waf_cookie_via_listen(url)
             if new_cookies:
@@ -234,7 +242,6 @@ class LagouAuthDownloaderMiddleware:
             for _ in range(10):
                 current_page_obj = page.page if hasattr(page, 'page') else page
 
-                # 兼容不同版本 DrissionPage 的 cookies 获取
                 cookies_raw = current_page_obj.cookies()
                 cookies_dict = cookies_raw if isinstance(cookies_raw, dict) else {c['name']: c['value'] for c in
                                                                                   cookies_raw}

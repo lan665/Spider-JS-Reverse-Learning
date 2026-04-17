@@ -7,19 +7,28 @@ class LagouSpider(scrapy.Spider):
     name = "lagou"
     allowed_domains = ["lagou.com"]
 
-    def start_requests(self):
+    async def start(self):
         self.logger.info("🚀 Spider 启动！准备执行翻页任务...")
 
         # 循环 1 到 5 页进行测试
         for page in range(1, 6):
             url = "https://www.lagou.com/gongsi/0-0-0-0.json"
 
+            payload_dict = {
+                "first": "false", "pn": str(page), "sortField": "0", "havemark": "0",
+                "showId" : "133eb023f2124e3a91c75860593b7bad"
+            }
+            form_str_for_hash = f"first=false&pn={page}&sortField=0&havemark=0"
             yield scrapy.Request(
                 url=url,
                 method='POST',
                 callback=self.parse,
                 dont_filter=True,
-                meta={'page': page}  #把页码传递给 Middleware 进行加密
+                meta={
+                    'page': page,
+                    'payload_dict': payload_dict,
+                    'form_str_for_hash': form_str_for_hash
+                } #把页码传递给 Middleware 进行加密
             )
 
     def parse(self, response):
