@@ -51,6 +51,7 @@
 
 - **避开命令行长度限制**：放弃 `sys.argv` 传参，改用 `fs.readFileSync(0, 'utf-8')` 通过标准输入流 (stdin) 接收 Python 灌入的海量密文数据。
 - **打破环境污染**：Python 端将 `bytes` 转换为纯数字数组字符串 `"[123, 45, 255...]"`。Node.js 端解析 JSON 后，使用最原生的 `new Uint8Array(byteArray)` 重新包裹。这一步物理切断了补环境框架对 `Buffer` 或 `ArrayBuffer` 原型链的干扰，成功触发原生 `se()` 解密逻辑。
+
 ![最终结果](./img/4.png)
 
 ## 3. 总结经验
